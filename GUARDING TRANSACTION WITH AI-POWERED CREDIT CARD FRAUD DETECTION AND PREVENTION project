@@ -1,0 +1,72 @@
+import mysql.connector
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+from flask import Flask, request, jsonify
+import joblib
+import numpy as np
+conn = mysql.connector.connect(
+    host='localhost',
+    user='root',
+    password='root',
+    database='credit_card_fraud'
+)
+cursor = conn.cursor()
+query = "SELECT * FROM transactions"
+df = pd.read_sql(query, conn)
+print(df.head())
+query = "SELECT * FROM transactions"
+df = pd.read_sql(query, conn)
+print(df.head())
+X = df[['scaled_amount']]
+y = df['is_fraud']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+print(classification_report(y_test, y_pred))
+joblib.dump(model, 'fraud_detection_model.pkl')
+app = Flask(__name__)
+model = joblib.load('fraud_detection_model.pkl')
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.get_json()
+    amount = data['amount']
+    scaled_amount = np.array([[amount]])
+    prediction = model.predict(scaled_amount)
+    return jsonify({'is_fraud': bool(prediction[0])})
+if __name__ == '__main__':
+    app.run(debug=True)
+#sql file
+CREATE TABLE transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    time TIMESTAMP,
+    amount DECIMAL(10, 2),
+    merchant VARCHAR(255),
+    is_fraud BOOLEAN
+);
+CREATE TABLE cardholders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255),
+    address VARCHAR(255),
+    email VARCHAR(255)
+);
+CREATE TABLE transaction_details (
+    transaction_id INT,
+    cardholder_id INT,
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id),
+    FOREIGN KEY (cardholder_id) REFERENCES cardholders(id)
+);
+INSERT INTO transactions (time, amount, merchant, is_fraud) VALUES 
+('2025-05-12 10:00:00', 100.00, 'Merchant A', FALSE),
+('2025-05-12 10:30:00', 150.00, 'Merchant B', TRUE);
+INSERT INTO cardholders (name, address, email) VALUES
+('John Doe', '123 Main St, Chennai', 'johndoe@example.com'),
+('Jane Smith', '456 Elm St, Chennai', 'janesmith@example.com');
+INSERT INTO transaction_details (transaction_id, cardholder_id) VALUES
+(1, 1),
+(2, 2);
+SELECT * from transactions;
+SELECT * from cardholders;
+SELECT * from transaction_details;
